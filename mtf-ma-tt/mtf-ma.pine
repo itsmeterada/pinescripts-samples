@@ -10,7 +10,7 @@
 //              Uses lookahead=off to prevent repainting.
 //              Updated for Pine Script v6. Corrected input functions and indicator declaration.
 // -----------------------------------------------------------------------------
-indicator(title="MTF Moving Average (itsmeterada) — fixed", shorttitle="MTF MA TT", overlay=true)
+indicator(title="MTF Moving Average (itsmeterada)", shorttitle="MTF MA TT", overlay=true)
 
 // ── Inputs ────────────────────────────────────────────────────────
 grpTF      = "Timeframe Settings"
@@ -43,12 +43,27 @@ plot(htfMA,
      linewidth = width)
 
 // ── Optional label ───────────────────────────────────────────────
-if showLabel and barstate.islast and not na(htfMA)
-    label.new(bar_index, htfMA,
-              str.format("{0} {1} ({2})", tfInput==""? timeframe.period:tfInput,
-                          str.upper(maType), maLen),
-              xloc=xloc.bar_index, yloc=yloc.price,
-              color=color.new(color.gray, 80),
-              textcolor=col,
-              style=label.style_label_left,
-              size=size.small)
+var label htfLbl = na  // ❶ 永続ラベル変数を宣言
+
+if barstate.islast and showLabel and not na(htfMA)
+    // ❷ まだ存在しなければ作成
+    if na(htfLbl)
+        htfLbl := label.new(
+                 bar_index, htfMA, "",
+                 xloc = xloc.bar_index, yloc = yloc.price,
+                 color = color.new(color.gray, 80),
+                 textcolor = col,
+                 style = label.style_label_left,
+                 size = size.small)
+
+    // ❸ 毎ティック位置とテキストを更新
+    label.set_xy(   htfLbl, bar_index, htfMA)
+    label_text = str.format("{0} {1} ({2})", tfInput == "" ? timeframe.period : tfInput, str.upper(maType), maLen)
+    label.set_text(htfLbl, label_text)
+    label.set_textcolor(htfLbl, col)  // 色を変える設定があれば
+    label.set_color(   htfLbl, color.new(color.gray, 80))
+    
+// ❹ ラベル非表示設定に切り替えたら削除
+if not showLabel and not na(htfLbl)
+    label.delete(htfLbl)
+    htfLbl := na
