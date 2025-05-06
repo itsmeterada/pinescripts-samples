@@ -1,0 +1,54 @@
+//@version=6
+// -----------------------------------------------------------------------------
+// Title: Multi-Timeframe Moving Average (Customizable) v6
+// Author: Takehiko TERADA (takehiko.terada@gmail.com
+// Date: 2025/05/06
+// Description: Plots a Moving Average (SMA or EMA) calculated on a
+//              user-selected higher timeframe onto the current chart.
+//              Allows customization of timeframe, MA type, length, source,
+//              line color, thickness, and label visibility.
+//              Uses lookahead=off to prevent repainting.
+//              Updated for Pine Script v6. Corrected input functions and indicator declaration.
+// -----------------------------------------------------------------------------
+indicator(title="MTF Moving Average (itsmeterada) — fixed", shorttitle="MTF MA TT", overlay=true)
+
+// ── Inputs ────────────────────────────────────────────────────────
+grpTF      = "Timeframe Settings"
+tfInput    = input.timeframe("",   title="Timeframe / 時間足", group=grpTF)   // "" = 現在の時間足
+grpMA      = "Moving Average Settings"
+maType     = input.string("SMA",   title="MA Type",   options=["SMA","EMA"], group=grpMA)
+maLen      = input.int(20,         title="MA Length", minval=1,             group=grpMA)
+src        = input.source(close,   title="Source",                          group=grpMA)
+
+grpStyle   = "Line Style"
+col        = input.color(color.blue, title="Line Color",      group=grpStyle)
+width      = input.int(2,             title="Line Thickness", minval=1,     group=grpStyle)
+transp     = input.int(0,             title="Transparency",   minval=0, maxval=100, group=grpStyle)
+
+grpLabel   = "Label Settings"
+showLabel  = input.bool(true, title="Show Label", group=grpLabel)
+
+// ── HTF MA 計算 (expression 内で完結させる) ──────────────────────
+htfMA = request.security(
+         syminfo.tickerid,
+         tfInput,
+         maType == "SMA" ? ta.sma(src, maLen) : ta.ema(src, maLen),
+         lookahead = barmerge.lookahead_off,
+         gaps      = barmerge.gaps_off)
+
+// ── Plot ──────────────────────────────────────────────────────────
+plot(htfMA,
+     title     = "HTF MA",
+     color     = color.new(col, transp),
+     linewidth = width)
+
+// ── Optional label ───────────────────────────────────────────────
+if showLabel and barstate.islast and not na(htfMA)
+    label.new(bar_index, htfMA,
+              str.format("{0} {1} ({2})", tfInput==""? timeframe.period:tfInput,
+                          str.upper(maType), maLen),
+              xloc=xloc.bar_index, yloc=yloc.price,
+              color=color.new(color.gray, 80),
+              textcolor=col,
+              style=label.style_label_left,
+              size=size.small)
