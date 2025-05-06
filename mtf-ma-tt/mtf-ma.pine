@@ -1,6 +1,6 @@
 //@version=6
 // -----------------------------------------------------------------------------
-// Title: Multi-Timeframe Moving Average (Customizable) v6
+// Title: Multi-Timeframe Moving Average (with label text) v6
 // Author: Takehiko TERADA (takehiko.terada@gmail.com)
 // Date: 2025/05/06
 // Description: Plots a Moving Average (SMA or EMA) calculated on a
