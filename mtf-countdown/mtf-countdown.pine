@@ -1,0 +1,193 @@
+//@version=6
+// -----------------------------------------------------------------------------
+// Title: Multi-Timeframe Countdown Timer v6
+// Author: Takehiko TERADA (takehiko.terada@gmail.com)
+// Date: 2025/05/08
+// Description: Displays a countdown timer for multiple timeframes showing 
+//              the time remaining until the next candle closes.
+//              Features include customizable display position, text size, colors,
+//              and timeframe selection. 4h candle reference time can be adjusted
+//              to match different exchange settings.
+//              Displays a compact table with all selected timeframes.
+//              Warning color activates when less than 10 seconds remain.
+// -----------------------------------------------------------------------------
+indicator("Multi-Timeframe Countdown Timer TT", overlay=true)
+
+// Constants
+const string POSITION_TOP_RIGHT = "Top Right"
+const string POSITION_BOTTOM_RIGHT = "Bottom Right"
+const string POSITION_TOP_LEFT = "Top Left"
+const string POSITION_BOTTOM_LEFT = "Bottom Left"
+
+// Settings
+position = input.string(POSITION_TOP_RIGHT, "Display Position", options=[POSITION_TOP_RIGHT, POSITION_BOTTOM_RIGHT, POSITION_TOP_LEFT, POSITION_BOTTOM_LEFT], group="Display")
+text_size = input.string("small", "Text Size", options=["tiny", "small", "normal", "large", "huge"], group="Display")
+warning_color = input.color(color.red, "Warning Color (< 10s)", group="Display")
+
+// 4h candle reference time setting
+candle_4h_offset = input.int(2, "4h Candle Reference Hour", minval=0, maxval=3, tooltip="Set the reference hour for 4h candles (0-3). Traditional: 0 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00), Forex/Some Exchanges: 2 (02:00, 06:00, 10:00, 14:00, 18:00, 22:00)", group="Time Settings")
+
+// Timeframes visibility
+show_1m = input.bool(true, "Show 1m", inline="1m", group="Timeframes")
+color_1m = input.color(color.blue, "", inline="1m", group="Timeframes")
+
+show_5m = input.bool(true, "Show 5m", inline="5m", group="Timeframes")
+color_5m = input.color(color.green, "", inline="5m", group="Timeframes")
+
+show_15m = input.bool(true, "Show 15m", inline="15m", group="Timeframes")
+color_15m = input.color(color.purple, "", inline="15m", group="Timeframes")
+
+show_1h = input.bool(true, "Show 1h", inline="1h", group="Timeframes")
+color_1h = input.color(color.orange, "", inline="1h", group="Timeframes")
+
+show_4h = input.bool(true, "Show 4h", inline="4h", group="Timeframes")
+color_4h = input.color(color.teal, "", inline="4h", group="Timeframes")
+
+show_1d = input.bool(true, "Show 1D", inline="1d", group="Timeframes")
+color_1d = input.color(color.gray, "", inline="1d", group="Timeframes")
+
+// Get current time in milliseconds
+current_time_ms = timenow
+
+// Constants for milliseconds in different time periods
+const int MS_PER_MINUTE = 60 * 1000
+const int MS_PER_5MINUTES = 5 * 60 * 1000
+const int MS_PER_15MINUTES = 15 * 60 * 1000
+const int MS_PER_HOUR = 60 * 60 * 1000
+const int MS_PER_4HOURS = 4 * 60 * 60 * 1000
+const int MS_PER_DAY = 24 * 60 * 60 * 1000
+
+// Calculate time until next candle for standard timeframes
+calculate_remaining_time(tf_ms) =>
+    next_candle_ms = math.ceil(current_time_ms / tf_ms) * tf_ms
+    math.round((next_candle_ms - current_time_ms) / 1000)
+
+// Calculate 4h remaining time with custom boundaries
+calculate_4h_remaining() =>
+    // Current time in seconds since midnight
+    current_second_of_day = hour(timenow) * 3600 + minute(timenow) * 60 + second(timenow)
+    
+    // Calculate 4h boundaries based on user-defined offset
+    int offset_seconds = candle_4h_offset * 3600
+    
+    // Calculate the reference hours based on the offset
+    int ref_hour1 = offset_seconds / 3600
+    int ref_hour2 = (ref_hour1 + 4) % 24
+    int ref_hour3 = (ref_hour1 + 8) % 24
+    int ref_hour4 = (ref_hour1 + 12) % 24
+    int ref_hour5 = (ref_hour1 + 16) % 24
+    int ref_hour6 = (ref_hour1 + 20) % 24
+    
+    // Convert hours to seconds
+    int boundary1 = ref_hour1 * 3600
+    int boundary2 = ref_hour2 * 3600
+    int boundary3 = ref_hour3 * 3600
+    int boundary4 = ref_hour4 * 3600
+    int boundary5 = ref_hour5 * 3600
+    int boundary6 = ref_hour6 * 3600
+    
+    // Find next 4h boundary
+    next_boundary = 0
+    
+    if current_second_of_day < boundary1
+        next_boundary := boundary1
+    else if current_second_of_day < boundary2
+        next_boundary := boundary2
+    else if current_second_of_day < boundary3
+        next_boundary := boundary3
+    else if current_second_of_day < boundary4
+        next_boundary := boundary4
+    else if current_second_of_day < boundary5
+        next_boundary := boundary5
+    else if current_second_of_day < boundary6
+        next_boundary := boundary6
+    else
+        // After the last boundary of the day, calculate time until first boundary tomorrow
+        next_boundary := boundary1 + 86400
+    
+    // If we're calculating time to tomorrow
+    if next_boundary > 86400
+        // Calculate time until midnight, then add time from midnight to next boundary
+        time_to_midnight = 86400 - current_second_of_day
+        next_boundary_after_midnight = next_boundary - 86400
+        time_to_midnight + next_boundary_after_midnight
+    else
+        // Normal case - calculate difference
+        next_boundary - current_second_of_day
+
+// Calculate remaining times
+remaining_1m = calculate_remaining_time(MS_PER_MINUTE)
+remaining_5m = calculate_remaining_time(MS_PER_5MINUTES)
+remaining_15m = calculate_remaining_time(MS_PER_15MINUTES)
+remaining_1h = calculate_remaining_time(MS_PER_HOUR)
+
+// Use custom calculation for 4h timeframe
+remaining_4h = calculate_4h_remaining()
+
+// Use PineScript's built-in function for 1d timeframe
+remaining_1d = math.max(0, math.floor((time_close(timeframe.period == "1D" ? "" : "1D") - timenow) / 1000))
+
+// Format time function
+format_time(seconds) =>
+    hours = math.floor(seconds / 3600)
+    minutes = math.floor((seconds % 3600) / 60)
+    secs = seconds % 60
+    
+    result = ""
+    if hours > 0
+        result := str.tostring(hours, "#0") + "h "
+    if hours > 0 or minutes > 0
+        result := result + str.tostring(minutes, "#0") + "m "
+    
+    result := result + str.tostring(secs, "#0") + "s"
+    result
+
+// Create display table
+if barstate.islast
+    // Determine position
+    string table_position = switch position
+        POSITION_TOP_RIGHT => position.top_right
+        POSITION_BOTTOM_RIGHT => position.bottom_right
+        POSITION_TOP_LEFT => position.top_left
+        POSITION_BOTTOM_LEFT => position.bottom_left
+    
+    // Create table
+    var table countdown_table = table.new(table_position, 2, 7)
+    table.clear(countdown_table, 0, 0)
+    
+    // Table header
+    table.cell(countdown_table, 0, 0, "TF", bgcolor=color.new(color.black, 90), text_color=color.white, text_size=text_size)
+    table.cell(countdown_table, 1, 0, "Remaining", bgcolor=color.new(color.black, 90), text_color=color.white, text_size=text_size)
+    
+    // Row counter
+    int row = 1
+    
+    // Add rows for each timeframe
+    if show_1m
+        table.cell(countdown_table, 0, row, "1m", text_size=text_size)
+        table.cell(countdown_table, 1, row, format_time(remaining_1m), text_color=remaining_1m <= 10 ? warning_color : color_1m, text_size=text_size)
+        row += 1
+    
+    if show_5m
+        table.cell(countdown_table, 0, row, "5m", text_size=text_size)
+        table.cell(countdown_table, 1, row, format_time(remaining_5m), text_color=remaining_5m <= 10 ? warning_color : color_5m, text_size=text_size)
+        row += 1
+    
+    if show_15m
+        table.cell(countdown_table, 0, row, "15m", text_size=text_size)
+        table.cell(countdown_table, 1, row, format_time(remaining_15m), text_color=remaining_15m <= 10 ? warning_color : color_15m, text_size=text_size)
+        row += 1
+    
+    if show_1h
+        table.cell(countdown_table, 0, row, "1h", text_size=text_size)
+        table.cell(countdown_table, 1, row, format_time(remaining_1h), text_color=remaining_1h <= 10 ? warning_color : color_1h, text_size=text_size)
+        row += 1
+    
+    if show_4h
+        table.cell(countdown_table, 0, row, "4h", text_size=text_size)
+        table.cell(countdown_table, 1, row, format_time(remaining_4h), text_color=remaining_4h <= 10 ? warning_color : color_4h, text_size=text_size)
+        row += 1
+    
+    if show_1d
+        table.cell(countdown_table, 0, row, "1D", text_size=text_size)
+        table.cell(countdown_table, 1, row, format_time(remaining_1d), text_color=remaining_1d <= 10 ? warning_color : color_1d, text_size=text_size)
