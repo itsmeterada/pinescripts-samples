@@ -1,0 +1,165 @@
+// © itsmeterada
+//@version=6
+indicator("MTF Bollinger Bands TT (3BB)", overlay=true, max_lines_count=300, max_labels_count=300)
+
+// ── 共通設定 ─────────────────────────────────────────────────
+src       = input.source(close,  "Source")
+maType    = input.string("SMA",  "MA Type", options=["SMA","EMA","WMA","VWMA"])
+waitClose = input.bool(true,     "Wait for higher-TF close?")
+lookaheadSetting = waitClose ? barmerge.lookahead_off : barmerge.lookahead_on
+
+// ── TF-1 (例:60) の設定 ───────────────────────────────────────
+group1 = "TF-1 (例:60)"
+en1  = input.bool(true,  "Enable",      inline=group1, group=group1)
+tf1  = input.timeframe("60",  "TF",        inline=group1, group=group1)
+per1 = input.int(20,    "Period",       inline=group1, group=group1)
+off1 = input.int(0,     "Offset",       inline=group1, group=group1)
+cB1  = input.color(color.blue,               "Basis Col", inline=group1, group=group1)
+c11  = input.color(color.new(color.blue,  0), "+/-1σ Col", inline=group1, group=group1)
+c21  = input.color(color.new(color.blue, 20), "+/-2σ Col", inline=group1, group=group1)
+c31  = input.color(color.new(color.blue, 40), "+/-3σ Col", inline=group1, group=group1)
+sB1  = input.bool(false, "Show Basis",   inline=group1, group=group1)
+s11  = input.bool(true,  "1σ",           inline=group1, group=group1)
+s21  = input.bool(true,  "2σ",           inline=group1, group=group1)
+s31  = input.bool(false, "3σ",           inline=group1, group=group1)
+
+// ── TF-2 (例:240) の設定 ─────────────────────────────────────
+group2 = "TF-2 (例:240)"
+en2  = input.bool(true,  "Enable",      inline=group2, group=group2)
+tf2  = input.timeframe("240", "TF",       inline=group2, group=group2)
+per2 = input.int(20,    "Period",       inline=group2, group=group2)
+off2 = input.int(0,     "Offset",       inline=group2, group=group2)
+cB2  = input.color(color.orange,             "Basis Col", inline=group2, group=group2)
+c12  = input.color(color.new(color.orange,  0), "+/-1σ Col", inline=group2, group=group2)
+c22  = input.color(color.new(color.orange, 20), "+/-2σ Col", inline=group2, group=group2)
+c32  = input.color(color.new(color.orange, 40), "+/-3σ Col", inline=group2, group=group2)
+sB2  = input.bool(false, "Show Basis",   inline=group2, group=group2)
+s12  = input.bool(true,  "1σ",           inline=group2, group=group2)
+s22  = input.bool(true,  "2σ",           inline=group2, group=group2)
+s32  = input.bool(false, "3σ",           inline=group2, group=group2)
+
+// ── TF-3 (例:D) の設定 ───────────────────────────────────────
+group3 = "TF-3 (例:D)"
+en3  = input.bool(true,  "Enable",      inline=group3, group=group3)
+tf3  = input.timeframe("D",   "TF",       inline=group3, group=group3)
+per3 = input.int(20,    "Period",       inline=group3, group=group3)
+off3 = input.int(0,     "Offset",       inline=group3, group=group3)
+cB3  = input.color(color.purple,             "Basis Col", inline=group3, group=group3)
+c13  = input.color(color.new(color.purple,  0), "+/-1σ Col", inline=group3, group=group3)
+c23  = input.color(color.new(color.purple, 20), "+/-2σ Col", inline=group3, group=group3)
+c33  = input.color(color.new(color.purple, 40), "+/-3σ Col", inline=group3, group=group3)
+sB3  = input.bool(false, "Show Basis",   inline=group3, group=group3)
+s13  = input.bool(true,  "1σ",           inline=group3, group=group3)
+s23  = input.bool(true,  "2σ",           inline=group3, group=group3)
+s33  = input.bool(false, "3σ",           inline=group3, group=group3)
+
+// ── MA／BB 計算関数 ─────────────────────────────────────────────
+f_ma(_s, _len, _type) =>
+    switch _type
+        "EMA"  => ta.ema (_s, _len)
+        "WMA"  => ta.wma (_s, _len)
+        "VWMA" => ta.vwma(_s, _len)
+        =>         ta.sma (_s, _len)
+
+f_bb(_s, _len, _type) =>
+    _basis = f_ma(_s, _len, _type)
+    _dev   = ta.stdev(_s, _len)
+    [_basis,
+     _basis + _dev,   _basis - _dev,
+     _basis + 2*_dev, _basis - 2*_dev,
+     _basis + 3*_dev, _basis - 3*_dev]
+
+// ── セキュリティ呼び出し ─────────────────────────────────────
+getBB(_tf, _per, _en) =>
+    if _en
+        request.security(syminfo.tickerid, _tf,
+                         f_bb(src, _per, maType),
+                         lookahead=lookaheadSetting, gaps=barmerge.gaps_off)
+    else
+        [na, na, na, na, na, na, na]
+
+[b1,u11,l11,u21,l21,u31,l31] = getBB(tf1, per1, en1)
+[b2,u12,l12,u22,l22,u32,l32] = getBB(tf2, per2, en2)
+[b3,u13,l13,u23,l23,u33,l33] = getBB(tf3, per3, en3)
+
+// ── プロット ────────────────────────────────────────────────
+plot(sB1  ? b1  : na, title="TF1 Basis", color=cB1, linewidth=1, offset=off1)
+plot(s11  ? u11 : na, title="TF1 +1σ" , color=c11, linewidth=1, offset=off1)
+plot(s11  ? l11 : na, title="TF1 -1σ" , color=c11, linewidth=1, offset=off1)
+plot(s21  ? u21 : na, title="TF1 +2σ" , color=c21, linewidth=1, offset=off1)
+plot(s21  ? l21 : na, title="TF1 -2σ" , color=c21, linewidth=1, offset=off1)
+plot(s31  ? u31 : na, title="TF1 +3σ" , color=c31, linewidth=1, offset=off1)
+plot(s31  ? l31 : na, title="TF1 -3σ" , color=c31, linewidth=1, offset=off1)
+
+plot(sB2  ? b2  : na, title="TF2 Basis", color=cB2, linewidth=1, offset=off2)
+plot(s12  ? u12 : na, title="TF2 +1σ" , color=c12, linewidth=1, offset=off2)
+plot(s12  ? l12 : na, title="TF2 -1σ" , color=c12, linewidth=1, offset=off2)
+plot(s22  ? u22 : na, title="TF2 +2σ" , color=c22, linewidth=1, offset=off2)
+plot(s22  ? l22 : na, title="TF2 -2σ" , color=c22, linewidth=1, offset=off2)
+plot(s32  ? u32 : na, title="TF2 +3σ" , color=c32, linewidth=1, offset=off2)
+plot(s32  ? l32 : na, title="TF2 -3σ" , color=c32, linewidth=1, offset=off2)
+
+plot(sB3  ? b3  : na, title="TF3 Basis", color=cB3, linewidth=1, offset=off3)
+plot(s13  ? u13 : na, title="TF3 +1σ" , color=c13, linewidth=1, offset=off3)
+plot(s13  ? l13 : na, title="TF3 -1σ" , color=c13, linewidth=1, offset=off3)
+plot(s23  ? u23 : na, title="TF3 +2σ" , color=c23, linewidth=1, offset=off3)
+plot(s23  ? l23 : na, title="TF3 -2σ" , color=c23, linewidth=1, offset=off3)
+plot(s33  ? u33 : na, title="TF3 +3σ" , color=c33, linewidth=1, offset=off3)
+plot(s33  ? l33 : na, title="TF3 -3σ" , color=c33, linewidth=1, offset=off3)
+
+// ── ラベル描画 ─────────────────────────────────────────────
+var label[] lbls = array.new<label>()
+cleanLabels() =>
+    // 配列に要素がある限り、先頭要素を取り出して削除
+    while array.size(lbls) > 0
+        lab = array.pop(lbls)
+        if not na(lab)
+            label.delete(lab)
+makeLabel(_y, _txt, _clr, _off) =>
+    lab = label.new(bar_index + _off, _y, _txt, xloc=xloc.bar_index, yloc=yloc.price, color=color.new(_clr, 95), textcolor=_clr, size=size.tiny, style=label.style_label_left)
+    array.push(lbls, lab)
+
+if barstate.islast
+    cleanLabels()
+    // TF1
+    if en1
+        if s11 and not na(u11) 
+            makeLabel(u11, tf1 + " ±1σ (" + str.tostring(per1) + ")", c11, off1)
+        if s11 and not na(l11)  
+            makeLabel(l11, tf1 + " ±1σ (" + str.tostring(per1) + ")", c11, off1)
+        if s21 and not na(u21)  
+            makeLabel(u21, tf1 + " ±2σ (" + str.tostring(per1) + ")", c21, off1)
+        if s21 and not na(l21)  
+            makeLabel(l21, tf1 + " ±2σ (" + str.tostring(per1) + ")", c21, off1)
+        if s31 and not na(u31)  
+            makeLabel(u31, tf1 + " ±3σ (" + str.tostring(per1) + ")", c31, off1)
+        if s31 and not na(l31)  
+            makeLabel(l31, tf1 + " ±3σ (" + str.tostring(per1) + ")", c31, off1)
+    // TF2
+    if en2
+        if s12 and not na(u12)  
+            makeLabel(u12, tf2 + " ±1σ (" + str.tostring(per2) + ")", c12, off2)
+        if s12 and not na(l12)  
+            makeLabel(l12, tf2 + " ±1σ (" + str.tostring(per2) + ")", c12, off2)
+        if s22 and not na(u22)  
+            makeLabel(u22, tf2 + " ±2σ (" + str.tostring(per2) + ")", c22, off2)
+        if s22 and not na(l22)  
+            makeLabel(l22, tf2 + " ±2σ (" + str.tostring(per2) + ")", c22, off2)
+        if s32 and not na(u32)  
+            makeLabel(u32, tf2 + " ±3σ (" + str.tostring(per2) + ")", c32, off2)
+        if s32 and not na(l32)  
+            makeLabel(l32, tf2 + " ±3σ (" + str.tostring(per2) + ")", c32, off2)
+    // TF3
+    if en3
+        if s13 and not na(u13)  
+            makeLabel(u13, tf3 + " ±1σ (" + str.tostring(per3) + ")", c13, off3)
+        if s13 and not na(l13)  
+            makeLabel(l13, tf3 + " ±1σ (" + str.tostring(per3) + ")", c13, off3)
+        if s23 and not na(u23)  
+            makeLabel(u23, tf3 + " ±2σ (" + str.tostring(per3) + ")", c23, off3)
+        if s23 and not na(l23)  
+            makeLabel(l23, tf3 + " ±2σ (" + str.tostring(per3) + ")", c23, off3)
+        if s33 and not na(u33)  
+            makeLabel(u33, tf3 + " ±3σ (" + str.tostring(per3) + ")", c33, off3)
+        if s33 and not na(l33)  
+            makeLabel(l33, tf3 + " ±3σ (" + str.tostring(per3) + ")", c33, off3)
